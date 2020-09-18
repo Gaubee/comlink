@@ -20,6 +20,8 @@ import {
   WireValue,
   WireValueType,
 } from "./protocol";
+import { TransferHandlerMap } from "./transferHandlerMap";
+export * from "./transferHandlerMap";
 export { Endpoint };
 
 export const proxyMarker = Symbol("Comlink.proxy");
@@ -186,7 +188,7 @@ const isObject = (val: unknown): val is object =>
  * @template T The input type being handled by this transfer handler.
  * @template S The serialized type sent over the wire.
  */
-export interface TransferHandler<T, S> {
+export interface TransferHandler<T = unknown, S = unknown> {
   /**
    * Gets called for every value to determine whether this transfer handler
    * should serialize the value, which includes checking that it is of the right
@@ -273,10 +275,7 @@ const throwTransferHandler: TransferHandler<
 /**
  * Allows customizing the serialization of certain values.
  */
-export const transferHandlers = new Map<
-  string,
-  TransferHandler<unknown, unknown>
->([
+export const transferHandlers = new TransferHandlerMap([
   ["proxy", proxyTransferHandler],
   ["throw", throwTransferHandler],
 ]);
@@ -491,7 +490,7 @@ export function windowEndpoint(
 }
 
 function toWireValue(value: any): [WireValue, Transferable[]] {
-  for (const [name, handler] of transferHandlers) {
+  for (const [name, handler] of transferHandlers.entries("serializable")) {
     if (handler.canHandle(value)) {
       const [serializedValue, transferables] = handler.serialize(value);
       return [
@@ -516,7 +515,9 @@ function toWireValue(value: any): [WireValue, Transferable[]] {
 function fromWireValue(value: WireValue): any {
   switch (value.type) {
     case WireValueType.HANDLER:
-      return transferHandlers.get(value.name)!.deserialize(value.value);
+      return transferHandlers
+        .get(value.name, "deserializable")!
+        .deserialize(value.value);
     case WireValueType.RAW:
       return value.value;
   }
